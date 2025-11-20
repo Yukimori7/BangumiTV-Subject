@@ -1,4 +1,4 @@
-name: Daily Data Sync to R2
+name: Fetch bgmtv Data Sync to R2
 
 on:
   schedule:
