@@ -1,0 +1,54 @@
+name: Daily Data Sync to R2
+
+on:
+  schedule:
+    - cron: '0 0 1,15 * *' # 每半个月运行一次
+  workflow_dispatch:
+
+jobs:
+  crawl-and-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 拉取代码 (使用 v6)
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # 2. 安装 Deno 环境 (使用 v2，指定 Deno 2.x 版本)
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # 3. 依次运行 Deno 脚本
+      - name: Run Crawlers
+        run: |
+          # 预创建 data 目录以防万一（如果脚本没自动创建）
+          mkdir -p data
+
+          echo "Running id.ts..."
+          deno run -A id.ts
+
+          echo "Running subject.ts..."
+          deno run -A subject.ts
+
+      # 4. 同步 data 目录到 Cloudflare R2
+      - name: Sync to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: https://${{ secrets.CF_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_BUCKET_NAME: bangumitv-subject
+        run: |
+          # 同步 data 目录
+          # aws s3 sync 默认递归处理子目录
+          # --exclude "*" + --include "*.json" 确保只上传 JSON 文件
+          # --content-type 强制设置为 JSON，方便浏览器预览
+
+          aws s3 sync ./data s3://$R2_BUCKET_NAME \
+            --endpoint-url $R2_ENDPOINT \
+            --region auto \
+            --no-progress \
+            --exclude "*" \
+            --include "*.json" \
+            --content-type "application/json" \
